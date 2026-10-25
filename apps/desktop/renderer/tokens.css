@@ -1,0 +1,85 @@
+/* apps\desktop\renderer\tokens.css —— 我们那套配色（2026-10-22 晚）
+ *
+ * 来源：`info\theme.ps1` 的四套预设，逐值对应。值写成 "r, g, b" 三元组，
+ * 这样既能 `rgb(var(--x))` 也能 `rgba(var(--x), .5)`（透明层次全靠这个）。
+ *
+ * 换主题 = 换 <html data-theme="...">，不用改一行组件样式。
+ */
+
+:root {
+  /* 电光蓝（默认）：主人 PPT 里的黑 + 电光蓝 */
+  --bg-deep: 8, 10, 23;
+  --bg-panel: 5, 13, 51;
+  --bg-card: 42, 47, 69;
+  --line: 58, 63, 85;
+  --accent: 0, 71, 255;
+  --accent-hi: 91, 155, 213;
+  --accent-dim: 20, 40, 110;
+  --fg: 231, 237, 255;
+  --fg-soft: 201, 207, 221;
+  --fg-dim: 150, 158, 178;
+  --warn: 237, 125, 49;
+  --good: 112, 173, 71;
+  --radius: 14px;
+}
+
+/* 暗紫：夜里看着不刺眼 */
+[data-theme='暗紫'] {
+  --bg-deep: 14, 10, 24;
+  --bg-panel: 28, 16, 52;
+  --bg-card: 52, 42, 72;
+  --line: 74, 62, 96;
+  --accent: 124, 77, 255;
+  --accent-hi: 178, 148, 255;
+  --accent-dim: 52, 32, 104;
+  --fg: 240, 236, 255;
+  --fg-soft: 212, 204, 232;
+  --fg-dim: 158, 150, 180;
+  --warn: 240, 140, 90;
+  --good: 140, 200, 140;
+}
+
+/* 青绿：清爽 */
+[data-theme='青绿'] {
+  --bg-deep: 6, 18, 20;
+  --bg-panel: 8, 38, 42;
+  --bg-card: 28, 58, 62;
+  --line: 44, 78, 82;
+  --accent: 0, 170, 150;
+  --accent-hi: 96, 214, 194;
+  --accent-dim: 12, 72, 66;
+  --fg: 228, 250, 246;
+  --fg-soft: 196, 224, 218;
+  --fg-dim: 140, 168, 164;
+  --warn: 240, 160, 80;
+  --good: 120, 200, 120;
+}
+
+/* 少女粉：她那套"傲娇"的观感 */
+[data-theme='少女粉'] {
+  --bg-deep: 24, 12, 20;
+  --bg-panel: 52, 22, 38;
+  --bg-card: 74, 40, 56;
+  --line: 104, 62, 80;
+  --accent: 232, 62, 140;
+  --accent-hi: 255, 148, 190;
+  --accent-dim: 104, 36, 68;
+  --fg: 255, 238, 246;
+  --fg-soft: 236, 206, 220;
+  --fg-dim: 182, 150, 164;
+  --warn: 245, 170, 90;
+  --good: 150, 210, 150;
+}
+
+/* ── 把她的气泡/信封也接到我们这套配色上 ──────────────────────────────────
+ * pet.js 自己给 .dshp-root 定义了一套 --dshp-*（浅色/暗色两档）。
+ * 这里用 id 选择器压过去（id > class，不需要 !important），
+ * 让"她的嘴"和"我们的卡片"是同一个视觉体系。
+ */
+#dsh-live2d-pet {
+  --dshp-bg: rgba(var(--bg-panel), 0.97);
+  --dshp-fg: rgb(var(--fg));
+  --dshp-line: rgba(var(--line), 0.9);
+  --dshp-accent: rgb(var(--accent-hi));
+  --dshp-radius: var(--radius);
+}

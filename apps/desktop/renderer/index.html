@@ -1,0 +1,82 @@
+<!doctype html>
+<!--
+  apps\desktop\renderer\index.html —— 新应用的页面（2026-10-23 再改：形象窗 / 浮窗分开）
+
+  **两个窗口，同一个页面**（主进程 main.mjs 按 ?her=1 / ?panel=1 分开加载）：
+
+    ① 形象窗（?her=1）—— 只有她：模型、眨眼、视线、气泡。窗口很小（就她 + 气泡的位置）。
+       没有页签、没有卡片。点空气会穿到桌面。
+    ② 浮窗（?panel=1）—— 就是"那张卡片"：标题条（按住 = 移这个窗口）+ 一排页签 +
+       一个正文区 + 底部「记一条」。**一张浮窗换内容**（不是每个功能各自一张浮窗）。
+
+  主人 2026-10-23 的话：
+    「浮窗只是单独于形象可移动和关闭（但是关形象一定要关掉浮窗），不是每个功能浮窗独立出现」
+    → 浮窗有自己独立的位置 + 自己独立的关闭；形象一关，浮窗跟着关（main.mjs 里保证）。
+
+  **种子脚本占位符**（下面单独一行那个 HER-SEED 注释）由宿主 info\pet\serve.mjs 换成
+  "她的存档种子"（?h= / ?maxW=），必须在 pet.js 之前 —— 否则她还是按默认 180 高来量，看着就是"一小块"。
+  ⚠️ 这个说明里**故意不写出占位符的字面串**：写了的话，宿主的 replace 会先吃掉注释里那个，
+     真正的占位符反而留在原地（2026-10-22 踩过一次，结果她还是 248×216）。
+-->
+<html lang="zh-CN" data-theme="电光蓝">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>她</title>
+    <link rel="stylesheet" href="/app/tokens.css" />
+    <link rel="stylesheet" href="/app/app.css" />
+  </head>
+  <body>
+    <script>
+      // pet.js 的启动信封（宿主会用真端口再盖一次；本地直开也能用）
+      window.__DSH_PET_BOOT__ = {
+        config: {},
+        version: 'local-serve',
+        desktop: true,
+        port: location.port ? Number(location.port) : 8790,
+      }
+      // 这一页在哪个窗口里：her = 形象窗（只有她），panel = 浮窗（卡片）
+      window.__DSH_MODE__ = /(\?|&)panel=1/.test(location.search) ? 'panel' : 'her'
+      document.documentElement.dataset.mode = window.__DSH_MODE__
+    </script>
+    <!--HER-SEED-->
+
+    <!-- 选项条（2026-10-24）：右键她 → 在她脚边弹一条窄带（今日/待办/日历/对话/错题/设置 + 换一身 + ×）
+         ⚠️ 为什么不用原生菜单：Electron 的 Menu.popup 在这个无边框+透明的窗口上**实测弹不出来**
+            （日志显示"菜单弹出"了，可窗口列表里一个新窗口都没有）。自己画一条，稳。 -->
+    <nav class="her-pick" id="her-pick" hidden></nav>
+
+    <!-- 提醒条（2026-10-24）：到她点了（DDL 快到了）就在她脚边弹这一条：知道了 / 稍后 10 分钟。
+         为什么不用系统通知上的按钮：Windows 的 Electron 通知不支持自定义按钮。 -->
+    <nav class="her-pick her-remind" id="her-remind" hidden>
+      <span class="her-remind-text" id="her-remind-text"></span>
+      <button class="her-pick-btn her-remind-ok" id="her-remind-ok" type="button">知道了</button>
+      <button class="her-pick-btn her-pick-alt" id="her-remind-later" type="button">稍后</button>
+    </nav>
+
+    <!-- 浮窗：标题条（按住 = 移这个窗口）+ 页签 + 正文 + 底部。形象窗里 app.js 会把整块拿掉。 -->
+    <section class="her-card" id="her-card" hidden>
+      <header class="her-card-head" id="her-card-head" title="按住这里拖动浮窗">
+        <span class="her-card-title" id="her-card-title">她</span>
+        <span class="her-card-acts">
+          <button class="her-ico" id="her-speak" type="button" title="念这一页（再点一次就停）">🔊</button>
+          <button class="her-ico" id="her-refresh" type="button" title="重新读一遍">⟳</button>
+          <button class="her-ico" id="her-close" type="button" title="收起浮窗（Esc）">×</button>
+        </span>
+      </header>
+      <nav class="her-tabs her-tabs-panel" id="her-tabs"></nav>
+      <div class="her-card-body" id="her-card-body"></div>
+      <!-- 2026-10-25 主人：「记录和处理」这一栏没用，都删掉。
+           两个功能没消失：设置页「工具」里有「记一条（进收件箱）」和「处理收件箱」，
+           info\local-process.mjs（脚本直接建任务、不走 LLM）那条路一个字都没动。 -->
+    </section>
+
+    <script>
+      // pet.js 只在形象窗里加载：浮窗那个窗口没必要再起一份 Live2D（多一份 WebGL 上下文、多一份 CPU）
+      if (window.__DSH_MODE__ === 'her') {
+        document.write('<script src="/dsh-pet/pet.js"><\/script>')
+      }
+    </script>
+    <script type="module" src="/app/app.js"></script>
+  </body>
+</html>

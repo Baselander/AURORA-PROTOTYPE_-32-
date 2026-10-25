@@ -1,0 +1,8 @@
+{
+  "name": "her-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "main.mjs",
+  "description": "她的桌面应用（Electron）：她的形象 + 我们的页面（apps/desktop）"
+}

@@ -1,0 +1,8 @@
+{
+  "_说明": "她的声音。engine = edge（在线，更像人说话）或 piper（本地离线，装不上网时用）。voice 写名字或键都行：xiaoxiao / xiaoyi / xiaochen / yunxi / yunjian。改完重启应用生效（或设置页点「重新加载界面」）。",
+  "engine": "edge",
+  "voice": "zh-CN-XiaoxiaoNeural",
+  "rate": "+5%",
+  "pitch": "+2Hz",
+  "volume": "+0%"
+}

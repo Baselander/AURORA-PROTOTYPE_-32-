@@ -1,0 +1,9 @@
+﻿{
+  "name": "her-shell",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "main.mjs",
+  "description": "她的透明外壳（Electron）：没有背景，只看见她",
+  "devDependencies": { "electron": "38.4.0" }
+}

@@ -1,0 +1,1582 @@
+/* apps\desktop\renderer\app.css —— 我们自己的界面（2026-10-23：形象窗 / 浮窗分开）
+ *
+ * 同一份 CSS 服务两个窗口（<html data-mode="her|panel">）：
+ *   形象窗（her）  ：只有她。这里的规则基本是"把她的工具栏/选择面板藏掉"那几条
+ *   浮窗（panel）  ：一张卡片 = 一个窗口。标题条（原生拖动）+ 页签条 + 正文 + 底部「记一条」
+ *
+ * 颜色一律吃 tokens.css 的变量，不写死。
+ */
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  font-family: 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', system-ui, sans-serif;
+  font-size: 11pt;
+  line-height: 1.55;
+  color: rgb(var(--fg));
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ── 把她压成"纯渲染引擎"：工具栏、五张选择面板、HUD、输入框全藏掉 ──────────
+ * 主人的要求：**她由她自己的脑子控制**，不是我们挑她的表情和道具。
+ * 留着的是：气泡（她说话）、信封 + 简报（她汇报）、点她的反应、呼吸/眨眼/视线。
+ */
+.dshp-dock,
+.dshp-menu,
+.dshp-hud,
+.dshp-composer,
+.dshp-tab {
+  display: none !important;
+}
+/* ⚠️ 2026-10-22 深夜（主人："她头上的对话+选项框被截掉一大截，上半部分像有框挡住"）：
+ * 真因是 **pet.js 把她自己的位置也存进了 localStorage**（`edge` / `edgeY`）。
+ * 窗口一改大小，那份 edgeY 就过时了 —— 实测她跑到窗口**顶部**（root.top=58，vh=496），
+ * 于是头顶的气泡（216px 高）有 174px 在窗口外面，看着就是"上半截被挡"。
+ * 解法：用 CSS 把她钉在窗口右下角（pet.js 用内联样式，所以必须 !important）。
+ * 她的气泡/面板是按 rect 算的，rect 变了它们会自己跟过来，不影响别的东西。
+ */
+#dsh-live2d-pet {
+  top: auto !important;
+  bottom: 6px !important;
+  left: auto !important;
+  right: 8px !important;
+}
+/* 她自己的存档里如果记着"隐藏"，新界面会一片空白 —— 保险起见永远可见 */
+.dshp-root.dshp-hidden {
+  opacity: 1 !important;
+  pointer-events: none !important;
+}
+
+/* ── 页签条（2026-10-23：浮窗窗口里的第二行，横着一条，挤不下就横滚）────────────
+ * 主人：「浮窗只是单独于形象可移动和关闭……不是每个功能浮窗独立出现」
+ * → 页签就在浮窗自己身上，点一下**换同一张浮窗里的内容**。
+ */
+.her-tabs.her-tabs-panel {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  padding: 5px 8px 6px;
+  background: rgba(var(--bg-card), 0.55);
+  border-bottom: 1px solid rgba(var(--line), 0.7);
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex: none;
+  /* 页签要能点 → 这一条不吃窗口拖动 */
+  -webkit-app-region: no-drag;
+}
+.her-tabs.her-tabs-panel::-webkit-scrollbar {
+  display: none;
+}
+.her-tabs.her-tabs-panel .her-tab {
+  flex: none;
+  padding: 2px 10px;
+  font-size: 10pt;
+}
+
+.her-tab {
+  border: 1px solid transparent;
+  background: transparent;
+  color: rgba(var(--fg-soft), 1);
+  font: inherit;
+  font-size: 10.5pt;
+  padding: 3px 11px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.her-tab:hover {
+  background: rgba(var(--accent-hi), 0.14);
+  color: rgb(var(--fg));
+}
+/* 当前页：浅蓝底 + 浅蓝描边（看图复核对过，别用纯电光蓝铺底） */
+.her-tab.her-tab-on {
+  background: rgba(var(--accent-hi), 0.22);
+  border-color: rgba(var(--accent-hi), 0.8);
+  color: rgb(var(--fg));
+  font-weight: 700;
+  box-shadow: inset 0 -2px 0 rgba(var(--accent-hi), 0.95);
+}
+
+/* ── 选项条（形象窗里，右键她 → 在她脚边弹一条窄带）────────────────────────
+ * 2026-10-24 主人：「右键形象也能打开和选择栏；现在只有右键任务栏的图标才有用」
+ * 为什么不是原生菜单：这个无边框+透明的窗口上 Menu.popup 实测弹不出来。自己画一条：
+ * 位置就在窗口底部（她脚下）、只占一条、9 秒自动收、点别处也收。
+ */
+.her-pick {
+  position: fixed;
+  left: 6px;
+  right: 6px;
+  bottom: 2px;
+  /* ⚠️ 必须比 pet.js 的 .dshp-root（2147483000）高，否则她的脚会盖住选项条、点不到 */
+  z-index: 2147483400;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 3px;
+  overflow-x: auto;
+  /* 越窄越好：看图复核说"挡住了她的脚" → 高度压到 ~22px，贴死窗口底边 */
+  padding: 2px 5px;
+  border-radius: 8px;
+  background: rgba(var(--bg-panel), 0.98);
+  border: 1px solid rgba(var(--line), 1);
+  scrollbar-width: none;
+  -webkit-app-region: no-drag;
+}
+.her-pick::-webkit-scrollbar {
+  display: none;
+}
+.her-pick[hidden] {
+  display: none;
+}
+.her-pick-btn {
+  flex: none;
+  font: inherit;
+  font-size: 8.5pt;
+  line-height: 1.2;
+  padding: 1px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(var(--line), 0.95);
+  background: rgba(var(--bg-card), 0.6);
+  color: rgba(var(--fg-soft), 1);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.her-pick-btn:hover {
+  background: rgba(var(--accent-hi), 0.2);
+  border-color: rgba(var(--accent-hi), 0.8);
+  color: rgb(var(--fg));
+}
+.her-pick-btn.her-pick-alt {
+  border-color: rgba(var(--accent-hi), 0.55);
+  color: rgba(var(--accent-hi), 1);
+}
+.her-pick-btn.her-pick-x {
+  margin-left: auto;
+  color: rgba(var(--fg-dim), 1);
+  border-color: transparent;
+  background: transparent;
+  font-size: 10pt;
+}
+.her-pick-btn.her-pick-x:hover {
+  background: rgba(var(--warn), 0.2);
+  color: rgb(var(--warn));
+}
+
+/* 提醒条（DDL 快到）：同一位置的另一条窄带，左边一句"还有 25 分钟 · 习题 4.2 22:00" + 两个按钮 */
+.her-remind {
+  gap: 6px;
+  align-items: center;
+  border-color: rgba(var(--warn), 0.8);
+  background: rgba(var(--bg-panel), 0.99);
+}
+.her-remind-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 9pt;
+  color: rgb(var(--warn));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.her-remind-ok {
+  border-color: rgba(var(--good), 0.7);
+  color: rgb(var(--good));
+  background: rgba(var(--good), 0.12);
+}
+.her-remind-ok:hover {
+  background: rgba(var(--good), 0.28);
+  color: rgb(var(--fg));
+}
+
+/* ── 浮窗卡片（2026-10-23：它自己是**一个独立窗口**，所以卡片就铺满这个窗口）────
+ * 位置 = 窗口的位置（拖动标题条 = 移窗口，主进程记在 out\her-app.panel.json）。
+ * ⚠️ 不许有 box-shadow / backdrop-filter：主人 2026-10-23 说「浮窗还是有一定模糊边框」——
+ *    透明窗口上画影子，只会糊在她/桌面上变成一圈灰雾。要边界就一条 1px 实线。
+ */
+.her-card {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-radius: var(--radius);
+  background: rgba(var(--bg-panel), var(--card-alpha, 0.97));
+  border: 1px solid rgba(var(--line), 1);
+  box-shadow: none;
+  overflow: hidden;
+}
+.her-card[hidden] {
+  display: none;
+}
+
+.her-card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 7px 7px 10px;
+  /* 标题条一眼看出"这是哪一页"：底色压深 + 标题加粗加大 + 左边一道浅蓝竖杠 */
+  background: rgba(var(--bg-card), 0.85);
+  border-bottom: 1px solid rgba(var(--line), 0.7);
+  flex: none;
+  cursor: grab;
+  /* 拖动把手：按住这一条拖这个窗口（Chromium 原生窗口拖动，比自己在 JS 里搬稳） */
+  -webkit-app-region: drag;
+}
+.her-card-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11.5pt;
+  font-weight: 700;
+  color: rgb(var(--fg));
+  letter-spacing: 0.04em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.her-card-title::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 12px;
+  margin-right: 8px;
+  border-radius: 2px;
+  background: rgba(var(--accent-hi), 0.95);
+  vertical-align: -1px;
+}
+.her-card-acts {
+  display: flex;
+  gap: 2px;
+  flex: none;
+  /* 按钮要能点 → 不吃窗口拖动 */
+  -webkit-app-region: no-drag;
+}
+/* 标题条上的小按钮（念 / 刷新 / 收起） */
+.her-ico {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(var(--fg-soft), 1);
+  font: inherit;
+  font-size: 11pt;
+  line-height: 1;
+  cursor: pointer;
+}
+.her-ico:hover {
+  background: rgba(var(--accent-hi), 0.16);
+  color: rgb(var(--fg));
+}
+
+/* 卡片正文：占满剩余高度、内部滚动（内容长也不裁；卡片高度按内容长，最多到窗口高） */
+.her-card-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 8px 14px 16px;
+  scrollbar-gutter: stable;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.her-card-body::-webkit-scrollbar {
+  width: 8px;
+}
+.her-card-body::-webkit-scrollbar-thumb {
+  background: rgba(var(--line), 1);
+  border-radius: 4px;
+}
+.her-card-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+/* ══════════════════════════════════════════════════════════════════════════════
+ *  条目卡片化（2026-10-24，主人要的「每个项都加上边框、点击进更详细的页面」）
+ *
+ *  三层：
+ *    .her-group   一组东西外面的框（标题 + 条数 + 里面若干条）
+ *    .her-item    一条东西 = 一个框（能点 → 详情浮层）—— 待办 / 错题 / 投放区文件 …
+ *    .her-sheet   详情浮层（铺满正文区，顶部「← 返回」）
+ *
+ *  参考了同学 Tevela（StudyOS）的取法：`.panel`（外框）/ `.suggestion`（小卡）/ `.record`（记录条）
+ *  —— 都是「不是靠一条细分割线，而是每一条自己有个边」。
+ * ══════════════════════════════════════════════════════════════════════════════ */
+
+/* 一组：外框 + 圆角 + 内边距；组与组之间留白 */
+.her-group {
+  margin: 10px 0 6px;
+  padding: 8px 9px 9px;
+  /* 2026-10-24 看图复核说『看不出外框』 → 边框换成淡青 + 底色再实一点 */
+  border: 1px solid rgba(var(--accent-hi), 0.3);
+  border-radius: 12px;
+  background: rgba(var(--bg-card), 0.34);
+}
+.her-group-h {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 1px 2px 7px;
+  font-size: 10pt;
+  font-weight: 700;
+  color: rgba(var(--accent-hi), 1);
+  letter-spacing: 0.02em;
+}
+.her-group-h::before {
+  content: '';
+  width: 3px;
+  height: 11px;
+  border-radius: 2px;
+  background: rgba(var(--accent-hi), 0.85);
+  flex: none;
+}
+.her-group-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.her-group-n {
+  flex: none;
+  font-size: 8.5pt;
+  font-weight: 700;
+  color: rgba(var(--accent-hi), 1);
+  background: rgba(var(--accent-dim), 0.9);
+  border: 1px solid rgba(var(--accent-hi), 0.35);
+  border-radius: 6px;
+  padding: 0 5px;
+}
+
+/* 一条：自己一个框，鼠标移上去亮一点，右边一个 › 表示"能点进去" */
+.her-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 9px;
+  margin: 5px 0 0;
+  border: 1px solid rgba(var(--line), 0.8);
+  border-left: 3px solid rgba(var(--accent-hi), 0.55);
+  border-radius: 10px;
+  background: rgba(var(--bg-panel), 0.55);
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, transform 0.06s ease;
+}
+.her-item:hover {
+  background: rgba(var(--accent-hi), 0.1);
+  border-color: rgba(var(--accent-hi), 0.75);
+  border-left-color: rgba(var(--accent-hi), 1);
+}
+.her-item:active {
+  transform: translateY(1px);
+}
+.her-item:focus-visible {
+  outline: 2px solid rgba(var(--accent-hi), 0.9);
+  outline-offset: 1px;
+}
+/* 迟了的：整圈警示色（看图复核说只靠左边一根『像选中态』，看不出是『这条迟了』）*/
+.her-item.her-item-late {
+  border-color: rgba(var(--warn), 0.5);
+  border-left: 3px solid rgba(var(--warn), 1);
+  background: rgba(var(--warn), 0.08);
+}
+/* 做完的：整体压暗 + 打勾的框变绿（跟以前 .her-row-done 一个口径，自检也在用那个类） */
+.her-item.her-item-done {
+  opacity: 0.62;
+}
+.her-item.her-item-done .her-item-title {
+  text-decoration: line-through;
+}
+.her-item.her-row-done .her-check {
+  background: rgba(var(--good), 0.85);
+  border-color: rgb(var(--good));
+}
+
+.her-item-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.her-item-title {
+  font-size: 10.5pt;
+  color: rgb(var(--fg));
+  word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.her-item-sub {
+  margin-top: 2px;
+  font-size: 9.5pt;
+  line-height: 1.5;
+  color: rgba(var(--fg-dim), 1);
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.her-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+  font-size: 9pt;
+  color: rgba(var(--fg-dim), 1);
+}
+.her-item-arrow {
+  flex: none;
+  align-self: center;
+  font-size: 13pt;
+  line-height: 1;
+  color: rgba(var(--fg-dim), 0.8);
+}
+.her-item:hover .her-item-arrow {
+  color: rgba(var(--accent-hi), 1);
+}
+.her-item .her-check {
+  margin-top: 2px;
+}
+/* 错题/文件那种"没有勾选框"的：左边一个序号/大小 */
+.her-item-no {
+  flex: none;
+  min-width: 22px;
+  text-align: center;
+  font-size: 8.5pt;
+  font-variant-numeric: tabular-nums;
+  color: rgba(var(--accent-hi), 1);
+  border-right: 1px solid rgba(var(--line), 0.7);
+  padding-right: 7px;
+  margin-right: 1px;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── 详情浮层（点条目升起来的那一张）───────────────────────────────────────────
+ * 挂在 #her-card 里、占满"标题条以下"的位置：标题条还在 → 看详情时浮窗还能拖。
+ */
+.her-card.her-has-sheet .her-card-body,
+.her-card.her-has-sheet .her-tabs,
+.her-card.her-has-sheet .her-foot {
+  display: none;
+}
+.her-sheet {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: rgba(var(--bg-deep), 0.55);
+}
+.her-sheet-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border-bottom: 1px solid rgba(var(--line), 0.8);
+  background: rgba(var(--bg-card), 0.5);
+}
+.her-sheet-back {
+  flex: none;
+  height: 24px;
+  padding: 0 9px;
+  font-size: 9.5pt;
+}
+.her-sheet-titles {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.her-sheet-title {
+  font-size: 11pt;
+  font-weight: 700;
+  color: rgb(var(--fg));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.her-sheet-sub {
+  font-size: 8.5pt;
+  color: rgba(var(--fg-dim), 1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.her-sheet-badge {
+  flex: none;
+}
+.her-sheet-acts {
+  flex: none;
+  padding: 7px 10px 2px;
+}
+.her-sheet-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 8px 12px 14px;
+  scrollbar-gutter: stable;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.her-sheet-body::-webkit-scrollbar {
+  width: 8px;
+}
+.her-sheet-body::-webkit-scrollbar-thumb {
+  background: rgba(var(--line), 1);
+  border-radius: 4px;
+}
+.her-sheet-foot {
+  flex: none;
+  padding: 7px 12px 9px;
+  border-top: 1px solid rgba(var(--line), 0.7);
+  font-size: 8.5pt;
+  color: rgba(var(--fg-dim), 1);
+}
+.her-sheet-block {
+  margin: 9px 0 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(var(--line), 0.75);
+  border-radius: 10px;
+  background: rgba(var(--bg-panel), 0.5);
+}
+.her-sheet-h {
+  margin: 0 0 4px;
+  font-size: 9pt;
+  font-weight: 700;
+  color: rgba(var(--accent-hi), 1);
+}
+.her-sheet-pre {
+  font-size: 10pt;
+  line-height: 1.62;
+  color: rgba(var(--fg-soft), 1);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.her-sheet-row {
+  display: flex;
+  gap: 10px;
+  padding: 2px 0;
+  font-size: 10pt;
+  color: rgba(var(--fg-soft), 1);
+}
+.her-sheet-k {
+  flex: none;
+  min-width: 62px;
+  color: rgba(var(--fg-dim), 1);
+}
+.her-sheet-v {
+  min-width: 0;
+  word-break: break-word;
+}
+
+
+/* 今日/日历/设置里那些"一行一条"的东西也给个框（主人：每个项都加上边框） */
+.her-group .her-line {
+  padding: 5px 9px;
+  margin: 4px 0 0;
+  border: 1px solid rgba(var(--line), 0.62);
+  border-radius: 8px;
+  background: rgba(var(--bg-panel), 0.42);
+}
+.her-group .her-line.her-line-warn {
+  border-color: rgba(var(--warn), 0.5);
+  background: rgba(var(--warn), 0.07);
+}
+.her-group .her-cal-item,
+.her-group .her-notice {
+  padding: 5px 9px;
+  margin: 4px 0 0;
+  border: 1px solid rgba(var(--line), 0.62);
+  border-radius: 8px;
+  background: rgba(var(--bg-panel), 0.42);
+}
+.her-group .her-kv {
+  padding: 4px 9px;
+  margin: 4px 0 0;
+  border: 1px solid rgba(var(--line), 0.55);
+  border-radius: 8px;
+  background: rgba(var(--bg-panel), 0.35);
+}
+
+/* ── 内容元件（今日 / 待办共用）─────────────────────────────────────────────*/
+.her-lead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 0 6px;
+  font-size: 10.5pt;
+  color: rgba(var(--fg-soft), 1);
+  border-bottom: 1px solid rgba(var(--line), 0.6);
+}
+.her-lead .her-badge-day {
+  border-radius: 6px;
+  padding: 1px 7px;
+  font-size: 9.5pt;
+  background: rgba(var(--accent-dim), 0.9);
+  color: rgba(var(--accent-hi), 1);
+  border: 1px solid rgba(var(--accent-hi), 0.35);
+}
+.her-lead .her-badge-rest {
+  border-radius: 6px;
+  padding: 1px 7px;
+  font-size: 9.5pt;
+  background: rgba(var(--good), 0.18);
+  color: rgb(var(--good));
+  border: 1px solid rgba(var(--good), 0.4);
+}
+
+.her-sec-h {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 15px 0 5px;
+  font-size: 10.5pt;
+  font-weight: 600;
+  color: rgba(var(--accent-hi), 1);
+  letter-spacing: 0.02em;
+}
+/* 段落标题左边一小段竖线：跟列表项的区分度靠它，不靠把字放大（看图复核说"区分度不足"） */
+.her-sec-h::before {
+  content: '';
+  width: 3px;
+  height: 11px;
+  border-radius: 2px;
+  background: rgba(var(--accent-hi), 0.85);
+  flex: none;
+}
+.her-line {
+  padding: 2px 0 2px 10px;
+  font-size: 10.5pt;
+  color: rgba(var(--fg-soft), 1);
+  word-break: break-word;
+  white-space: pre-wrap;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.her-line.her-line-warn {
+  color: rgb(var(--warn));
+}
+
+.her-empty {
+  padding: 14px 2px;
+  color: rgba(var(--fg-dim), 1);
+  font-size: 10.5pt;
+}
+.her-note {
+  margin-top: 10px;
+  padding: 7px 9px;
+  border-radius: 9px;
+  background: rgba(var(--bg-card), 0.6);
+  color: rgba(var(--fg-dim), 1);
+  font-size: 9.5pt;
+  line-height: 1.5;
+}
+
+/* 待办一行 */
+.her-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 7px 0;
+  border-top: 1px solid rgba(var(--line), 0.55);
+}
+.her-row:first-of-type {
+  border-top: 0;
+}
+.her-check {
+  flex: none;
+  margin: 3px 0 0;
+  width: 15px;
+  height: 15px;
+  border-radius: 4px;
+  border: 1px solid rgba(var(--line), 1);
+  background: rgba(var(--bg-deep), 0.7);
+  cursor: pointer;
+  position: relative;
+}
+.her-row.her-row-done .her-check {
+  background: rgba(var(--good), 0.85);
+  border-color: rgb(var(--good));
+}
+.her-row.her-row-done .her-row-title {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+.her-row-main {
+  flex: 1;
+  min-width: 0;
+}
+.her-row-title {
+  font-size: 10.5pt;
+  color: rgb(var(--fg));
+  word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.her-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 2px;
+  font-size: 9pt;
+  color: rgba(var(--fg-dim), 1);
+}
+.her-pill {
+  border-radius: 5px;
+  padding: 0 5px;
+  border: 1px solid rgba(var(--line), 0.9);
+  background: rgba(var(--bg-card), 0.5);
+  font-size: 9pt;
+  color: rgba(var(--fg-soft), 1);
+}
+.her-pill.her-pill-homework {
+  border-color: rgba(var(--accent-hi), 0.45);
+  color: rgba(var(--accent-hi), 1);
+}
+.her-pill.her-pill-overdue {
+  border-color: rgba(var(--warn), 0.55);
+  color: rgb(var(--warn));
+}
+
+.her-busy {
+  color: rgba(var(--fg-dim), 1);
+  font-size: 10.5pt;
+  padding: 10px 0;
+}
+
+/* ── 日历页 ─────────────────────────────────────────────────────────────────*/
+.her-cal-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0 8px;
+}
+.her-cal-title {
+  flex: 1;
+  font-size: 11pt;
+  font-weight: 600;
+  color: rgb(var(--fg));
+}
+.her-cal-head .her-tab {
+  padding: 2px 9px;
+  font-size: 9.5pt;
+}
+
+.her-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+}
+.her-cal-wd {
+  text-align: center;
+  font-size: 8.5pt;
+  color: rgba(var(--fg-dim), 1);
+  padding: 1px 0 3px;
+}
+.her-cal-cell {
+  position: relative;
+  min-height: 32px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: rgba(var(--bg-card), 0.3);
+  padding: 3px 4px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.her-cal-cell:hover {
+  background: rgba(var(--bg-card), 0.55);
+}
+.her-cal-cell.her-cal-out {
+  background: transparent;
+  cursor: default;
+  opacity: 0.35;
+}
+.her-cal-cell.her-cal-sel {
+  border-color: rgba(var(--accent-hi), 0.7);
+  background: rgba(var(--accent-dim), 0.55);
+}
+.her-cal-day {
+  font-size: 9.5pt;
+  color: rgba(var(--fg-soft), 1);
+  font-variant-numeric: tabular-nums;
+}
+.her-cal-cell.her-cal-today .her-cal-day {
+  color: rgb(var(--accent-hi));
+  font-weight: 700;
+}
+.her-cal-marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+.her-cal-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(var(--accent-hi), 0.95);
+}
+.her-cal-dot.her-cal-dot-overdue {
+  background: rgb(var(--warn));
+}
+
+.her-cal-day-h {
+  margin: 16px 0 6px;
+  font-size: 10pt;
+  font-weight: 600;
+  color: rgba(var(--accent-hi), 1);
+}
+/* 段落之间的"分区线"：日历页里"选中那天的安排"和"通知"原本同底色、分不开（看图复核提的） */
+.her-sec-split {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(var(--line), 0.7);
+}
+.her-cal-item {
+  display: flex;
+  gap: 8px;
+  padding: 1px 0 1px 10px;
+  font-size: 10pt;
+  color: rgba(var(--fg-soft), 1);
+  word-break: break-word;
+}
+.her-cal-time {
+  flex: none;
+  min-width: 42px;
+  color: rgba(var(--fg-dim), 1);
+  font-variant-numeric: tabular-nums;
+}
+
+.her-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 0;
+  border-top: 1px solid rgba(var(--line), 0.45);
+  font-size: 10pt;
+  color: rgba(var(--fg-soft), 1);
+}
+.her-notice:first-of-type {
+  border-top: 0;
+}
+.her-notice-x {
+  margin-left: auto;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: rgba(var(--fg-dim), 1);
+  font: inherit;
+  font-size: 11pt;
+  line-height: 1;
+  cursor: pointer;
+}
+.her-notice-x:hover {
+  background: rgba(var(--warn), 0.18);
+  color: rgb(var(--warn));
+}
+
+/* ── 设置页 / 通用小元件 ────────────────────────────────────────────────────*/
+.her-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 2px 0 4px;
+}
+.her-chip {
+  border: 1px solid rgba(var(--line), 0.95);
+  background: rgba(var(--bg-card), 0.45);
+  color: rgba(var(--fg-soft), 1);
+  font: inherit;
+  font-size: 10pt;
+  padding: 3px 10px;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.her-chip:hover {
+  background: rgba(var(--accent-hi), 0.14);
+  color: rgb(var(--fg));
+}
+.her-chip.her-chip-on {
+  background: rgba(var(--accent-dim), 0.95);
+  border-color: rgba(var(--accent-hi), 0.6);
+  color: rgb(var(--accent-hi));
+  font-weight: 600;
+}
+.her-chip:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.her-kv {
+  display: flex;
+  gap: 10px;
+  padding: 3px 0 3px 10px;
+  font-size: 10pt;
+  color: rgba(var(--fg-soft), 1);
+}
+.her-kv-k {
+  flex: none;
+  min-width: 76px;
+  color: rgba(var(--fg-dim), 1);
+}
+.her-kv-v {
+  min-width: 0;
+  word-break: break-all;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* ── 错题页（只读，原生 <details> 折叠）──────────────────────────────────────*/
+.her-mk {
+  border-top: 1px solid rgba(var(--line), 0.5);
+  padding: 3px 0;
+}
+.her-mk:first-of-type {
+  border-top: 0;
+}
+.her-mk-sum {
+  cursor: pointer;
+  font-size: 10pt;
+  color: rgba(var(--fg-soft), 1);
+  padding: 4px 2px;
+  list-style: none;
+  word-break: break-word;
+}
+.her-mk-sum::-webkit-details-marker {
+  display: none;
+}
+.her-mk-sum::before {
+  content: '▸';
+  display: inline-block;
+  width: 14px;
+  color: rgba(var(--fg-dim), 1);
+}
+.her-mk[open] > .her-mk-sum {
+  color: rgb(var(--fg));
+  font-weight: 600;
+}
+.her-mk[open] > .her-mk-sum::before {
+  content: '▾';
+  color: rgb(var(--accent-hi));
+}
+.her-mk-row {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px 0 5px 14px;
+}
+.her-mk-label {
+  font-size: 9pt;
+  color: rgba(var(--accent-hi), 1);
+}
+.her-mk-text {
+  font-size: 10pt;
+  color: rgba(var(--fg-soft), 1);
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* ── 对话页 ─────────────────────────────────────────────────────────────────*/
+.her-msgs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 0 8px;
+}
+.her-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 100%;
+}
+.her-msg-who {
+  font-size: 8.5pt;
+  color: rgba(var(--fg-dim), 1);
+}
+.her-msg-text {
+  padding: 6px 9px;
+  border-radius: 10px;
+  font-size: 10.5pt;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.her-msg-user {
+  align-items: flex-end;
+}
+.her-msg-user .her-msg-text {
+  background: rgba(var(--accent-dim), 0.95);
+  border: 1px solid rgba(var(--accent-hi), 0.35);
+  color: rgb(var(--fg));
+}
+.her-msg-her .her-msg-text {
+  background: rgba(var(--bg-card), 0.55);
+  border: 1px solid rgba(var(--line), 0.85);
+  color: rgba(var(--fg-soft), 1);
+}
+
+/* ```board 画图块（2026-10-25 P0-2）：她在对话里讲题时画的那张图 */
+.her-board {
+  margin-top: 4px;
+  padding: 4px;
+  border: 1px solid rgba(var(--line), 0.85);
+  border-radius: 10px;
+  background: rgba(var(--bg-card), 0.72);
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.her-board canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+  background: #fffdf7;
+}
+.her-board-cap {
+  font-size: 8.5pt;
+  color: rgba(var(--fg-dim), 1);
+  padding: 2px 2px 0;
+}
+
+.her-send {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 0 2px;
+  border-top: 1px solid rgba(var(--line), 0.6);
+  margin-top: 6px;
+}
+.her-send-input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 9px;
+  border-radius: 9px;
+  border: 1px solid rgba(var(--line), 0.95);
+  background: rgba(var(--bg-deep), 0.55);
+  color: rgb(var(--fg));
+  font: inherit;
+  font-size: 10.5pt;
+  outline: none;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.her-send-input:focus {
+  border-color: rgba(var(--accent-hi), 0.7);
+}
+.her-chip-send {
+  height: 28px;
+  padding: 0 12px;
+  /* 主色按钮：看图复核说"纯文字'发'辨识度低"，那就让它看起来就是个按钮 */
+  background: rgba(var(--accent-dim), 0.95);
+  border-color: rgba(var(--accent-hi), 0.65);
+  color: rgb(var(--accent-hi));
+  font-weight: 600;
+}
+.her-chip-send:hover {
+  background: rgba(var(--accent), 0.85);
+  color: rgb(var(--fg));
+}.her-send-input::placeholder {
+  color: rgba(var(--fg-dim), 1);
+  font-size: 9.5pt;
+}
+
+/* ── 卡片底部：记一条 / 处理收件箱（除"对话"页都显示）────────────────────────*/
+.her-foot {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 9px 12px 11px;
+  border-top: 1px solid rgba(var(--line), 0.7);
+  background: rgba(var(--bg-card), 0.3);
+}
+.her-foot[hidden] {
+  display: none;
+}
+.her-foot .her-send-input {
+  height: 26px;
+  font-size: 10pt;
+}
+.her-foot .her-chip {
+  height: 26px;
+  padding: 0 9px;
+  font-size: 9.5pt;
+}
+.her-foot-msg {
+  flex: 1;
+  min-width: 0;
+  font-size: 9pt;
+  color: rgba(var(--fg-dim), 1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+}
+/* ── 设置页：大小滑动栏 ─────────────────────────────────────────────────────*/
+.her-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0 2px;
+}
+.her-range {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 3px;
+  background: rgba(var(--line), 1);
+  outline: none;
+  cursor: pointer;
+}
+.her-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgb(var(--accent-hi));
+  border: 2px solid rgba(var(--bg-panel), 1);
+  box-shadow: 0 0 0 1px rgba(var(--accent-hi), 0.5);
+}
+.her-slider-val {
+  flex: none;
+  min-width: 84px;
+  text-align: right;
+  font-size: 9.5pt;
+  color: rgba(var(--accent-hi), 1);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 她的气泡 / 简报面板：别被窗口上沿切掉 ───────────────────────────────────
+ * 2026-10-22 深夜实测：气泡最高 ~216px，窗口上方原来只留 120 → 切掉 174px。
+ * 主进程现在按 260 留（--her-headroom），这里再给简报面板补一道限高：
+ * 面板本身最高 430px，放不下就在里面滚，不要顶到窗口外面去。
+ */
+.dshp-report {
+  max-height: calc(var(--her-headroom, 260px) - 18px) !important;
+}
+
+/* ── 「今天要带的」可勾（2026-10-23）──────────────────────────────────────────*/
+.her-line-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding-left: 0;
+}
+.her-line-check .her-check {
+  margin-top: 4px;
+}
+.her-line-check.her-line-done .her-line-text {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+.her-line-text {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   批次 1（2026-10-24）：按科目切换 / 今日完成情况 / 每日提醒 / 每周计划 / 学科计划
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* 「按时间 / 按科目」那个切换条：小一号，别跟页签抢目光 */
+.her-groupby {
+  margin: 0 0 6px;
+}
+.her-groupby .her-chip {
+  height: 22px;
+  padding: 0 9px;
+  font-size: 9pt;
+}
+
+/* 今天做完了 N 条：勾掉的排成暗色，一眼分得开 */
+.her-line.her-line-done {
+  opacity: 0.55;
+}
+.her-done-today {
+  font-size: 9.5pt;
+}
+
+/* 设置页 / 日历页里的输入框（每日提醒、学科计划、每周计划都用它） */
+.her-input {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(var(--line), 0.95);
+  background: rgba(var(--bg-deep), 0.55);
+  color: rgb(var(--fg));
+  font: inherit;
+  font-size: 10pt;
+  outline: none;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.her-input:focus {
+  border-color: rgba(var(--accent-hi), 0.7);
+}
+.her-input[readonly] {
+  color: rgba(var(--fg-dim), 1);
+}
+.her-input-time {
+  flex: none;
+  width: 86px;
+  font-variant-numeric: tabular-nums;
+}
+.her-textarea {
+  width: 100%;
+  min-height: 74px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(var(--line), 0.95);
+  background: rgba(var(--bg-deep), 0.55);
+  color: rgb(var(--fg));
+  font: inherit;
+  font-size: 10pt;
+  line-height: 1.5;
+  outline: none;
+  resize: vertical;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.her-textarea:focus {
+  border-color: rgba(var(--accent-hi), 0.7);
+}
+
+/* 每日提醒 / 学科计划的一行：左边字，右边开关 */
+.her-daily-item,
+.her-plan-item,
+.her-week-goal {
+  align-items: center;
+  gap: 8px;
+}
+.her-daily-item .her-kv-v,
+.her-plan-item .her-kv-v {
+  flex: 1;
+  min-width: 0;
+}
+.her-plan-item {
+  cursor: pointer;
+  border-radius: 6px;
+}
+.her-plan-item:hover {
+  background: rgba(var(--accent-dim), 0.35);
+  color: rgb(var(--fg));
+}
+
+/* 每周计划那块（日历页最上面） */
+.her-week-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10pt;
+  font-weight: 600;
+  color: rgb(var(--fg));
+  padding: 2px 0 4px;
+}
+.her-week-h .her-group-n {
+  font-weight: 500;
+}
+.her-week-arch {
+  font-size: 9pt;
+  color: rgba(var(--fg-dim), 1);
+  padding: 2px 0 0 10px;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   错题趋势（2026-10-24 晚）：主人说"总结栏太乱、挤到一起" → 换成三张表
+   ══════════════════════════════════════════════════════════════════════════════ */
+.her-trend-tbl {
+  margin: 4px 0 8px;
+}
+.her-trend-cap {
+  font-size: 9pt;
+  color: rgba(var(--fg-dim), 1);
+  padding: 2px 0 3px;
+}
+.her-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9.5pt;
+  table-layout: auto;
+}
+.her-table th {
+  text-align: left;
+  font-weight: 600;
+  font-size: 8.8pt;
+  color: rgba(var(--accent-hi), 1);
+  padding: 3px 8px 3px 0;
+  border-bottom: 1px solid rgba(var(--line), 0.85);
+  white-space: nowrap;
+}
+.her-table td {
+  padding: 3px 8px 3px 0;
+  color: rgba(var(--fg-soft), 1);
+  border-bottom: 1px solid rgba(var(--line), 0.35);
+  vertical-align: middle;
+  word-break: break-word;
+}
+.her-table tr:last-child td {
+  border-bottom: 0;
+}
+.her-table td:nth-child(2) {
+  color: rgb(var(--fg));
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* 小柱条（趋势那一列） */
+.her-bar {
+  width: 54px;
+  height: 7px;
+  border-radius: 4px;
+  background: rgba(var(--line), 0.55);
+  overflow: hidden;
+}
+.her-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: rgba(var(--accent-hi), 0.85);
+}
+.her-bar-warn .her-bar-fill {
+  background: rgba(var(--warn, 240 170 90), 0.9);
+}
+.her-trend-note {
+  font-size: 9.5pt;
+  color: rgba(var(--fg-soft), 1);
+  padding: 4px 0 0;
+}
+
+/* 原始小结（折起来） */
+.her-detail {
+  font-size: 9.5pt;
+}
+.her-detail > summary {
+  cursor: pointer;
+  color: rgba(var(--fg-dim), 1);
+  padding: 2px 0;
+  list-style: none;
+}
+.her-detail > summary::-webkit-details-marker {
+  display: none;
+}
+.her-detail > summary::before {
+  content: '▸';
+  display: inline-block;
+  width: 13px;
+  color: rgba(var(--fg-dim), 1);
+}
+.her-detail[open] > summary::before {
+  content: '▾';
+}
+.her-detail-body {
+  padding: 4px 0 2px 13px;
+}
+.her-detail-h {
+  font-size: 9pt;
+  font-weight: 600;
+  color: rgba(var(--accent-hi), 0.95);
+  padding: 4px 0 2px;
+}
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10pt;
+  font-weight: 600;
+  color: rgb(var(--fg));
+  padding: 2px 0 4px;
+}
+.her-week-h .her-group-n {
+  font-weight: 500;
+}
+.her-week-arch {
+  font-size: 9pt;
+  color: rgba(var(--fg-dim), 1);
+  padding: 2px 0 0 10px;
+}
+
+/* ── 今日页进度条（2026-10-25 主人要的）──────────────────────────────────────*/
+.her-progress {
+  margin: 6px 0 8px;
+}
+.her-progress-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 0 4px;
+}
+.her-progress-title {
+  font-size: 10.5pt;
+  font-weight: 600;
+  color: rgb(var(--fg));
+}
+.her-progress-pct {
+  font-size: 10pt;
+  color: rgba(var(--accent-hi), 1);
+  font-variant-numeric: tabular-nums;
+}
+.her-progress-bar {
+  height: 8px;
+  border-radius: 5px;
+  background: rgba(var(--line), 0.75);
+  overflow: hidden;
+}
+.her-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: 5px;
+  background: linear-gradient(90deg, rgba(var(--accent-dim), 1), rgba(var(--accent-hi), 0.95));
+  transition: width 0.25s ease;
+}
+.her-progress-sub {
+  padding: 4px 0 0;
+  font-size: 9pt;
+  color: rgba(var(--fg-dim), 1);
+}
+
+/* ── 对话页三段式（2026-10-25：顶部主题条固定 / 中间滚 / 底部输入栏固定）─────*/
+.her-chat-wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.her-chat-top-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 0 6px;
+}
+.her-chat-top-title {
+  font-size: 10pt;
+  font-weight: 600;
+  color: rgb(var(--fg));
+  flex: none;
+}
+.her-chat-top-head .her-topic-new {
+  height: 24px;
+  font-size: 9.5pt;
+}
+.her-chat-topic-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+.her-topic-card {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  margin-bottom: 6px;
+}
+.her-topic-card-on {
+  border-color: rgba(var(--accent-hi), 0.55);
+}
+.her-chat-chatting .her-chat-top {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 0 6px;
+  border-bottom: 1px solid rgba(var(--line), 0.6);
+}
+.her-chat-topic-name {
+  font-size: 10pt;
+  font-weight: 600;
+  color: rgb(var(--fg));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.her-chat-chatting .her-msgs {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+.her-chat-chatting .her-send {
+  flex: none;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding-top: 6px;
+}
+/* 输入框 1~5 行自适应 */
+.her-send-area {
+  flex: 1;
+  min-width: 0;
+  height: auto;
+  min-height: 28px;
+  max-height: 116px;
+  padding: 5px 9px;
+  line-height: 1.45;
+  resize: none;
+  overflow-y: auto;
+  font-family: inherit;
+}
+
+/* ── 选项条最下面那行输入（2026-10-25 主人：「右键她后加个输入栏，可以直接聊天」）──*/
+.her-pick {
+  flex-wrap: wrap;
+  align-items: center;
+  row-gap: 2px;
+}
+.her-pick-send {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 2px 4px 3px;
+}
+.her-pick-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 6px;
+  border: 1px solid rgba(var(--line), 0.95);
+  background: rgba(var(--bg-deep), 0.75);
+  color: rgb(var(--fg));
+  font: inherit;
+  font-size: 9pt;
+  outline: none;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.her-pick-input:focus {
+  border-color: rgba(var(--accent-hi), 0.75);
+}
+.her-pick-go {
+  flex: none;
+  width: 22px;
+  height: 20px;
+  border-radius: 6px;
+  border: 1px solid rgba(var(--accent-hi), 0.55);
+  background: rgba(var(--accent-dim), 0.95);
+  color: rgb(var(--accent-hi));
+  font: inherit;
+  font-size: 10pt;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
